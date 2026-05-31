@@ -11,78 +11,128 @@ import numpy as np
 DB_NAME = "activity_monitor.db"
 
 
-# ---------- Дерекқор инициализациясы ----------
+# ---------- Дерекқор инициализациясы (тек кестелер мен мұғалім) ----------
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute(
-        '''CREATE TABLE IF NOT EXISTS students (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)''')
-    c.execute(
-        '''CREATE TABLE IF NOT EXISTS activities (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER, date TEXT, task_title TEXT, task_type TEXT, grade_10 INTEGER, response_time REAL, attendance INTEGER)''')
-    c.execute(
-        '''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, student_id INTEGER UNIQUE)''')
-
-    students = ["Айбек Төлегенов", "Диана Смағұлова", "Ерасыл Нұржан", "Жансая Әлібекқызы", "Мерей Қайрат",
-                "Нұрай Серікқызы", "Санат Бекболат", "Томирис Жанәділ", "Шыңғыс Арман"]
-    for name in students:
-        c.execute("INSERT OR IGNORE INTO students (name) VALUES (?)", (name,))
+    c.execute('''CREATE TABLE IF NOT EXISTS students (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        name TEXT UNIQUE NOT NULL,
+        class_name TEXT NOT NULL
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS activities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        student_id INTEGER, 
+        date TEXT, 
+        task_title TEXT, 
+        task_type TEXT, 
+        grade_10 INTEGER, 
+        response_time REAL, 
+        attendance INTEGER
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        username TEXT UNIQUE NOT NULL, 
+        password_hash TEXT NOT NULL, 
+        role TEXT NOT NULL, 
+        student_id INTEGER UNIQUE
+    )''')
 
     teacher_hash = hashlib.sha256("teacher123".encode()).hexdigest()
     c.execute("INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?,?,?)",
               ("teacher", teacher_hash, "teacher"))
 
+    conn.commit()
+    conn.close()
+    print("Дерекқор құрылымы дайын.")
+
+
+# ---------- Үлгі деректерді қосу (батырма арқылы) ----------
+def insert_sample_data():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    # 1. Барлық ескі деректерді өшіру (қайталануды болдырмау үшін)
+    c.execute("DELETE FROM activities")
+    c.execute("DELETE FROM users WHERE role='student'")
+    c.execute("DELETE FROM students")
+
+    # 2. Сыныптар мен оқушылар саны
+    classes = {
+        "9А": 20,
+        "9Ә": 20,
+        "9В": 20
+    }
+
+    # 3. 60 бірегей есім тізімі (қайталанбайтын)
+    unique_names = [
+        "Айбек Төлегенов", "Диана Смағұлова", "Ерасыл Нұржан", "Жансая Әлібекқызы", "Мерей Қайрат",
+        "Нұрай Серікқызы", "Санат Бекболат", "Томирис Жанәділ", "Шыңғыс Арман", "Алихан Нұрланұлы",
+        "Аружан Қасымова", "Бекжан Ержанұлы", "Гүлназ Тілеуова", "Дамир Сапарғали", "Әсем Жақсылықова",
+        "Жандос Мұратұлы", "Камила Есентаева", "Мадина Байғазина", "Назерке Оразова", "Рахым Жанатұлы",
+        "Салтанат Серікқызы", "Талғат Мұқанов", "Ұлжан Бекболатова", "Фатима Омарқызы", "Хантөре Нұржанұлы",
+        "Шынар Ержанқызы", "Эльмира Төлегенова", "Ясмина Сапарғалиева", "Азамат Қайратұлы", "Әлихан Серікұлы",
+        "Бауыржан Жанәділұлы", "Дастан Арманұлы", "Еркебұлан Мұратұлы", "Жанат Қасымов", "Зере Нұрланқызы",
+        "Ислам Бекболатұлы", "Кәусар Оразова", "Ләззат Жақсылықова", "Мөлдір Есентаева", "Нұрсұлтан Байғазин",
+        "Олжас Тілеуов", "Перизат Қасымова", "Раушан Жанатқызы", "Самал Мұқанова", "Тәуке Серікұлы",
+        "Үміт Нұржанқызы", "Фархат Әлібекұлы", "Хадиша Рахымқызы", "Шығыс Төлегенов", "Элина Смағұлова",
+        "Ақжол Бекболатұлы", "Баян Нұржанқызы", "Дәулет Қайратұлы", "Ержан Серікұлы", "Жұлдыз Оразова",
+        "Зангар Төлеуов", "Инабат Нұрланқызы", "Қуаныш Мұратұлы", "Лаура Серікқызы", "Мұхтар Байғазин"
+    ]  # Дәл 60 есім
+
+    # 4. Оқушыларды қосу (әр сыныпқа 20 бірегей есім)
+    name_index = 0
+    for class_name, count in classes.items():
+        for i in range(count):
+            student_name = unique_names[name_index]
+            name_index += 1
+            c.execute("INSERT INTO students (name, class_name) VALUES (?,?)", (student_name, class_name))
+
+    # 5. Барлық оқушы ID-лерін алу
     c.execute("SELECT id FROM students")
+    student_ids = [row[0] for row in c.fetchall()]
+
+    # 6. Әр оқушыға бағалар енгізу (5 тапсырма)
+    dates = [
+        ("2025-04-01", "Алгоритмдер (БЖБ)", "БЖБ"),
+        ("2025-04-08", "Циклдер (БЖБ)", "БЖБ"),
+        ("2025-04-15", "Шартты оператор (ТЖБ)", "ТЖБ"),
+        ("2025-04-22", "Массивтер (формативті)", "Формативті"),
+        ("2025-04-29", "Функциялар (ТЖБ)", "ТЖБ")
+    ]
+
+    for sid in student_ids:
+        for date, task_title, task_type in dates:
+            if task_type == "Формативті":
+                grade_10 = random.randint(5, 10)
+                resp = random.uniform(5, 15)
+            elif task_type == "БЖБ":
+                score = random.randint(50, 100)
+                grade_10 = round(score / 10)
+                resp = random.uniform(15, 30)
+            else:  # ТЖБ
+                score = random.randint(50, 100)
+                grade_10 = round(score / 10)
+                resp = random.uniform(30, 45)
+            att = 1 if random.random() > 0.1 else 0
+            c.execute(
+                "INSERT INTO activities (student_id, date, task_title, task_type, grade_10, response_time, attendance) VALUES (?,?,?,?,?,?,?)",
+                (sid, date, task_title, task_type, grade_10, resp, att))
+
+    # 7. Оқушылардың логиндерін жасау (student1, student2, ..., student60)
+    c.execute("SELECT id FROM students ORDER BY id")
     for idx, (sid,) in enumerate(c.fetchall(), 1):
         username = f"student{idx}"
         pwd_hash = hashlib.sha256(f"{username}123".encode()).hexdigest()
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, student_id) VALUES (?,?,?,?)",
                   (username, pwd_hash, "student", sid))
+
     conn.commit()
     conn.close()
-    print("Дерекқор дайын")
+    print("Үлгі деректер сәтті қосылды!")
 
 
-# ---------- Үлгі деректерді қосу ----------
-def insert_sample_data():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("DELETE FROM activities")
-    students_df = get_students()
-    sids = students_df['id'].tolist()
-    for sid in sids:
-        # Формативті (3 тапсырма)
-        for i in range(1, 4):
-            grade = random.randint(5, 10)
-            rt = random.uniform(5, 12)
-            att = 1 if random.random() > 0.1 else 0
-            date = f"2025-04-{10 + i}"
-            c.execute(
-                "INSERT INTO activities (student_id, date, task_title, task_type, grade_10, response_time, attendance) VALUES (?,?,?,?,?,?,?)",
-                (sid, date, f"Формативті {i}", "Формативті", grade, rt, att))
-        # БЖБ (2 тапсырма)
-        for i in range(4, 6):
-            score_100 = random.randint(50, 100)
-            grade = round(score_100 / 10)
-            rt = random.uniform(20, 30)
-            att = 1 if random.random() > 0.1 else 0
-            date = f"2025-04-{10 + i}"
-            c.execute(
-                "INSERT INTO activities (student_id, date, task_title, task_type, grade_10, response_time, attendance) VALUES (?,?,?,?,?,?,?)",
-                (sid, date, f"БЖБ {i - 3}", "БЖБ", grade, rt, att))
-        # ТЖБ (1 тапсырма)
-        score_100 = random.randint(50, 100)
-        grade = round(score_100 / 10)
-        rt = random.uniform(35, 45)
-        att = 1 if random.random() > 0.1 else 0
-        date = "2025-04-16"
-        c.execute(
-            "INSERT INTO activities (student_id, date, task_title, task_type, grade_10, response_time, attendance) VALUES (?,?,?,?,?,?,?)",
-            (sid, date, "ТЖБ", "ТЖБ", grade, rt, att))
-    conn.commit()
-    conn.close()
-
-
-# ---------- Көмекші функциялар ----------
+# ---------- Қалған функциялар ----------
 def get_students():
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query("SELECT id, name FROM students", conn)
@@ -92,7 +142,7 @@ def get_students():
 
 def get_activities(student_id=None, start_date=None, end_date=None):
     conn = sqlite3.connect(DB_NAME)
-    query = "SELECT a.*, s.name FROM activities a JOIN students s ON a.student_id = s.id"
+    query = "SELECT a.*, s.name, s.class_name FROM activities a JOIN students s ON a.student_id = s.id"
     params, cond = [], []
     if student_id:
         cond.append("a.student_id = ?")
@@ -210,8 +260,10 @@ if not st.session_state.auth:
 
 st.title("📊 Информатика пәні бойынша оқу белсенділігін мониторингтеу жүйесі")
 
+# Бүйірлік панель
 with st.sidebar:
     if st.session_state.role == "teacher":
+        st.markdown("### 📌 Басты әрекеттер")
         if st.button("📂 Базаны көрсету", key="db_btn"):
             st.session_state.show_db = True
         if st.button("➕ Үлгі деректерді қосу", key="sample_btn"):
@@ -219,8 +271,22 @@ with st.sidebar:
             st.success("Үлгі деректер қосылды! Бетті жаңартыңыз.")
             st.rerun()
         st.markdown("---")
+        st.markdown("### 📊 Графиктер")
+        if st.button("📊 Белсенділік", key="sidebar_act"):
+            st.session_state.show_act = True
+        if st.button("🔮 Болжам", key="sidebar_pred"):
+            st.session_state.show_pred = True
+        if st.button("⚠️ Ескертулер", key="sidebar_warn"):
+            st.session_state.show_warn = True
+        if st.button("📈 Сызықтық салыстыру", key="sidebar_line"):
+            st.session_state.show_line = True
+        if st.button("🔥 Жылу картасы", key="sidebar_heat"):
+            st.session_state.show_heat = True
+        if st.button("🏆 Үздік оқушылар", key="sidebar_top"):
+            st.session_state.show_top = True
+    st.markdown("---")
     if st.button("🚪 Шығу", key="logout_btn"):
-        for k in ['auth', 'role', 'sid', 'show_db']:
+        for k in ['auth', 'role', 'sid', 'show_db', 'show_act', 'show_pred', 'show_warn', 'show_line', 'show_heat']:
             if k in st.session_state:
                 del st.session_state[k]
         st.rerun()
@@ -232,7 +298,7 @@ if st.session_state.get("show_db", False):
         st.rerun()
     st.markdown("---")
 
-# ---------- МҰҒАЛІМ ИНТЕРФЕЙСІ ----------
+# Мұғалім интерфейсі
 if st.session_state.role == "teacher":
     students_df = get_students()
 
@@ -249,9 +315,22 @@ if st.session_state.role == "teacher":
          "📂 Импорт / API"])
 
     with tabs[0]:
+        # ----- Сынып таңдау селекторы (басында) -----
+        # Барлық сыныптарды алу
+        conn = sqlite3.connect(DB_NAME)
+        classes_df = pd.read_sql_query("SELECT DISTINCT class_name FROM students ORDER BY class_name", conn)
+        conn.close()
+        class_list = classes_df['class_name'].tolist() if not classes_df.empty else ["9А", "9Ә", "9В"]
+        selected_class = st.selectbox("📚 Сыныпты таңдаңыз", class_list, key="class_selector")
+
+        # Деректерді жүктеу
         df = get_activities(start_date=start_str, end_date=end_str)
+        # Таңдалған сынып бойынша сүзу
+        df = df[df['class_name'] == selected_class]
+
         if df.empty:
-            st.info("Берілген күн аралығында деректер жоқ. «Үлгі деректерді қосу» арқылы қосыңыз.")
+            st.info(
+                f"{selected_class} сыныбы үшін берілген күн аралығында деректер жоқ. «Үлгі деректерді қосу» арқылы қосыңыз.")
         else:
             df['Белсенділік'] = df.apply(calc_index, axis=1)
             task_type_filter = st.selectbox("Тапсырма түрін таңдаңыз", ["Формативті", "БЖБ", "ТЖБ"],
@@ -271,7 +350,8 @@ if st.session_state.role == "teacher":
                         warnings.append("⚠️")
                     else:
                         warnings.append("")
-                display_df = pd.DataFrame({
+
+                full_df = pd.DataFrame({
                     'Оқушы': latest_filtered['name'],
                     'Баға (1-10)': latest_filtered['grade_10'],
                     'Уақыт (мин)': latest_filtered['response_time'],
@@ -280,12 +360,89 @@ if st.session_state.role == "teacher":
                     'Келесі болжам': predictions,
                     'Ескерту': warnings
                 })
-                st.dataframe(display_df, use_container_width=True)
-                fig = px.bar(display_df, x='Оқушы', y='Белсенділік (0-100)',
-                             title=f"{task_type_filter} түрі бойынша соңғы белсенділік индексі")
-                st.plotly_chart(fig, use_container_width=True)
+                st.subheader(f"📋 {selected_class} сыныбының оқушылар кестесі")
+                st.dataframe(full_df, use_container_width=True)
 
-    # ---------- 2. Деректерді енгізу ----------
+                if st.session_state.get("show_act", False):
+                    st.subheader("📊 Белсенділік индексі (гистограмма)")
+                    fig_act = px.bar(full_df, x='Оқушы', y='Белсенділік (0-100)',
+                                     title="Белсенділік индексі (0-100)",
+                                     color='Белсенділік (0-100)', color_continuous_scale='Viridis')
+                    fig_act.update_layout(height=400, autosize=True)
+                    st.plotly_chart(fig_act, use_container_width=True)
+                    st.session_state.show_act = False
+
+                if st.session_state.get("show_pred", False):
+                    st.subheader("🔮 Келесі тапсырмаға болжамды бағалар")
+                    fig_pred = px.bar(full_df, x='Оқушы', y='Келесі болжам',
+                                      title="Болжамды бағалар (1-10)",
+                                      color='Келесі болжам', color_continuous_scale='Blues')
+                    fig_pred.update_layout(height=400, autosize=True)
+                    st.plotly_chart(fig_pred, use_container_width=True)
+                    st.session_state.show_pred = False
+
+                if st.session_state.get("show_warn", False):
+                    st.subheader("⚠️ Ескерту қажет оқушылар")
+                    warns = full_df[full_df['Ескерту'] == "⚠️"]
+                    if not warns.empty:
+                        st.warning("Төмендегі оқушыларға назар аударыңыз:")
+                        st.dataframe(warns[['Оқушы', 'Белсенділік (0-100)', 'Келесі болжам']],
+                                     use_container_width=True)
+                    else:
+                        st.success("Ескерту қажет оқушы жоқ.")
+                    st.session_state.show_warn = False
+
+                if st.session_state.get("show_line", False):
+                    st.subheader("📈 Белсенділік пен болжамның сызықтық салыстыруы")
+                    fig_line = px.line(full_df, x='Оқушы',
+                                       y=['Белсенділік (0-100)', 'Келесі болжам'],
+                                       title="Белсенділік пен болжамның салыстыруы (сызықтық)",
+                                       markers=True,
+                                       color_discrete_sequence=['#2ed573', '#4a9eff'])
+                    fig_line.update_layout(height=400, autosize=True)
+                    st.plotly_chart(fig_line, use_container_width=True)
+                    st.session_state.show_line = False
+
+                if st.session_state.get("show_heat", False):
+                    st.subheader("🔥 Жылу картасы (оқушылар × күндер)")
+                    pivot = df_filtered.pivot_table(index='name', columns='date', values='grade_10', aggfunc='first')
+                    if not pivot.empty:
+                        fig_heat = px.imshow(pivot, text_auto=True, aspect="auto", color_continuous_scale='Blues',
+                                             title="Бағалардың жылу картасы")
+                        fig_heat.update_layout(height=400, autosize=True)
+                        st.plotly_chart(fig_heat, use_container_width=True)
+                    else:
+                        st.info("Жылу картасы үшін деректер жоқ.")
+                    st.session_state.show_heat = False
+
+                st.caption("⚠️ - белсенділік 50-ден төмен немесе баға 4-тен төмен оқушылар")
+
+                if st.session_state.get("show_top", False):
+                    st.subheader("🏆 Үздік оқушылар")
+
+                    # Бағасы бойынша ең жоғары 5 оқушы
+                    top_by_grade = full_df.nlargest(5, 'Баға (1-10)')[['Оқушы', 'Баға (1-10)', 'Белсенділік (0-100)']]
+                    st.write("**Ең жоғары балл алған 5 оқушы:**")
+                    st.dataframe(top_by_grade, use_container_width=True)
+
+                    # Белсенділігі бойынша ең жоғары 5 оқушы
+                    top_by_activity = full_df.nlargest(5, 'Белсенділік (0-100)')[
+                        ['Оқушы', 'Белсенділік (0-100)', 'Баға (1-10)']]
+                    st.write("**Ең белсенді 5 оқушы:**")
+                    st.dataframe(top_by_activity, use_container_width=True)
+
+                    # Біріктірілген (бағасы да, белсенділігі де жоғары)
+                    top_both = full_df[(full_df['Баға (1-10)'] >= 9) & (full_df['Белсенділік (0-100)'] >= 80)]
+                    if not top_both.empty:
+                        st.write("**Бағасы ≥ 9 ЖӘНЕ Белсенділігі ≥ 80 оқушылар:**")
+                        st.dataframe(top_both[['Оқушы', 'Баға (1-10)', 'Белсенділік (0-100)']],
+                                     use_container_width=True)
+                    else:
+                        st.info("Жоғары балл мен белсенділікті біріктірген оқушы жоқ.")
+
+                    st.session_state.show_top = False  # бір рет көрсетіп, батырманы қайтару
+
+    # Қалған қойындылар (өзгеріссіз)
     with tabs[1]:
         if students_df.empty:
             st.warning("Оқушылар жоқ")
@@ -320,14 +477,13 @@ if st.session_state.role == "teacher":
                 st.success("Сақталды!")
                 st.rerun()
 
-    # ---------- 3. Жеке графиктер ----------
     with tabs[2]:
         if not students_df.empty:
             selected = st.selectbox("Оқушыны таңдаңыз", students_df['name'].tolist(), key="chart_student")
-            sid = students_df[students_df['name'] == selected]['id'].values[0]
-            df = get_activities(student_id=sid, start_date=start_str, end_date=end_str)
+            all_activities = get_activities(start_date=start_str, end_date=end_str)
+            df = all_activities[all_activities['name'] == selected]
             if df.empty:
-                st.info("Бұл оқушыға деректер жоқ")
+                st.info(f"Бұл оқушыға {start_str} мен {end_str} аралығында деректер жоқ")
             else:
                 df['Белсенділік'] = df.apply(calc_index, axis=1)
                 df = df.sort_values('date')
@@ -342,7 +498,6 @@ if st.session_state.role == "teacher":
                 st.plotly_chart(px.bar(df, x='date', y='Белсенділік', color='task_type', title="Белсенділік индексі"),
                                 use_container_width=True)
 
-    # ---------- 4. Сыныптық талдау ----------
     with tabs[3]:
         df = get_activities(start_date=start_str, end_date=end_str)
         if not df.empty:
@@ -365,21 +520,112 @@ if st.session_state.role == "teacher":
         else:
             st.info("Деректер жоқ")
 
-    # ---------- 5. Оқушы логиндері ----------
     with tabs[4]:
         df_login = get_student_login_info()
         if not df_login.empty:
             st.dataframe(df_login, use_container_width=True)
             st.info("Пароль: логин + '123' (мысалы, student1 → student1123)")
 
-    # ---------- 6. Импорт / API ----------
     with tabs[5]:
-        st.subheader("CSV импорт (әзірлену үстінде)")
-        st.info("Бұл функция келесі нұсқада қосылады.")
-        st.subheader("Kundelik.kz API (тәжірибелік)")
-        st.info("API интеграциясы әзірленуде.")
+        st.subheader("📂 Файлдан импорттау (CSV, XLSX)")
 
-# ---------- ОҚУШЫ ИНТЕРФЕЙСІ ----------
+        uploaded_file = st.file_uploader("Деректері бар файлды таңдаңыз", type=['csv', 'xlsx'])
+
+        if uploaded_file is not None:
+            try:
+                # 1. Файлды оқу
+                if uploaded_file.name.endswith('.csv'):
+                    df_import = pd.read_csv(uploaded_file)
+                else:
+                    df_import = pd.read_excel(uploaded_file, engine='openpyxl')
+
+                # 2. Баған атауларын қалыпқа келтіру (бос орындарды өшіру, кіші әріпке түрлендіру)
+                df_import.columns = df_import.columns.str.strip().str.lower()
+
+                # 3. Баған атауларын ағылшыншаға түрлендіру (қазақша болса)
+                column_mapping = {
+                    'оқушы': 'student_name', 'оқушы аты': 'student_name', 'student_name': 'student_name',
+                    'күн': 'date', 'date': 'date',
+                    'тапсырма атауы': 'task_title', 'тапсырма': 'task_title', 'task_title': 'task_title',
+                    'тапсырма түрі': 'task_type', 'түрі': 'task_type', 'task_type': 'task_type',
+                    'баға(1-10)': 'grade_10', 'баға': 'grade_10', 'grade_10': 'grade_10',
+                    'уақыт': 'response_time', 'жауап уақыты': 'response_time', 'response_time': 'response_time',
+                    'қатысу': 'attendance', 'attendance': 'attendance'
+                }
+                df_import.rename(columns=column_mapping, inplace=True)
+
+                # 4. Күнді дұрыс форматқа келтіру (YYYY-MM-DD)
+                if 'date' in df_import.columns:
+                    # Тек күн бөлігін алу (уақытты алып тастау)
+                    df_import['date'] = pd.to_datetime(df_import['date']).dt.strftime('%Y-%m-%d')
+
+                # 5. Тапсырма түрін түзету
+                if 'task_type' in df_import.columns:
+                    df_import['task_type'] = df_import['task_type'].replace({
+                        'Форматитеті': 'Формативті',
+                        'Форматтвті': 'Формативті',
+                        'формативті': 'Формативті'
+                    })
+
+                # 6. Қажетті бағандарды тексеру
+                required_cols = ['student_name', 'date', 'task_title', 'task_type', 'grade_10', 'response_time',
+                                 'attendance']
+                missing_cols = [col for col in required_cols if col not in df_import.columns]
+
+                if missing_cols:
+                    st.error(f"Қажетті бағандар табылмады: {missing_cols}")
+                    st.info("Файлдың баған атаулары: " + ", ".join(df_import.columns))
+                else:
+                    st.subheader("🔍 Жүктелген файлдың алғашқы 5 жолы")
+                    st.dataframe(df_import.head(), use_container_width=True)
+
+                    # 7. Оқушы атын ID-ге түрлендіру
+                    students_df = get_students()
+                    name_to_id = dict(zip(students_df['name'], students_df['id']))
+
+                    # 8. Деректерді дайындау
+                    import_rows = []
+                    errors = []
+                    for idx, row in df_import.iterrows():
+                        student_name = row['student_name']
+                        if student_name not in name_to_id:
+                            errors.append(f"{idx + 1}. жол: '{student_name}' оқушысы табылмады")
+                            continue
+                        student_id = name_to_id[student_name]
+                        date = row['date']  # қазір қарапайым жол форматында
+                        task_title = str(row['task_title'])
+                        task_type = str(row['task_type'])
+                        grade_10 = int(float(row['grade_10']))  # кейде сандық мән float болуы мүмкін
+                        response_time = float(row['response_time'])
+                        attendance = int(float(row['attendance']))
+                        import_rows.append(
+                            (student_id, date, task_title, task_type, grade_10, response_time, attendance))
+
+                    if errors:
+                        st.warning("Келесі қателер орын алды:")
+                        for err in errors[:10]:
+                            st.write(err)
+
+                    if import_rows:
+                        if st.button("📥 Импорттау (жаңа деректер қосылады, ескілер сақталады)", key="import_btn"):
+                            conn = sqlite3.connect(DB_NAME)
+                            c = conn.cursor()
+                            c.executemany(
+                                "INSERT INTO activities (student_id, date, task_title, task_type, grade_10, response_time, attendance) VALUES (?,?,?,?,?,?,?)",
+                                import_rows)
+                            conn.commit()
+                            conn.close()
+                            st.success(f"✅ {len(import_rows)} жазба сәтті импортталды!")
+                            st.balloons()
+                            st.rerun()
+                    else:
+                        st.error("Импорттау үшін ешқандай деректер жоқ")
+
+            except Exception as e:
+                st.error(f"Қате орын алды: {str(e)}")
+                st.info(
+                    "Файл форматын тексеріңіз. Керекті бағандар: student_name, date, task_title, task_type, grade_10, response_time, attendance")
+
 else:
     name = get_student_name(st.session_state.sid)
     st.subheader(f"Қош келдің, {name}!")
