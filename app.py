@@ -7,11 +7,11 @@ import hashlib
 import random
 from sklearn.linear_model import LinearRegression
 import numpy as np
-import os  # Файлды жою үшін
+import os
 
 DB_NAME = "activity_monitor.db"
 
-# ---------- ЕСКІ БАЗАНЫ ЖОЮ (тек бірінші рет) ----------
+# ЕСКІ БАЗАНЫ ЖОЮ (әр іске қосқанда жаңа база)
 if os.path.exists(DB_NAME):
     os.remove(DB_NAME)
     print(f"Ескі база жойылды: {DB_NAME}")
@@ -42,33 +42,21 @@ def init_db():
         role TEXT NOT NULL, 
         student_id INTEGER UNIQUE
     )''')
-
     teacher_hash = hashlib.sha256("teacher123".encode()).hexdigest()
     c.execute("INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?,?,?)",
               ("teacher", teacher_hash, "teacher"))
-
     conn.commit()
     conn.close()
-    print("Жаңа дерекқор құрылымы дайын.")
+    print("Жаңа дерекқор дайын.")
 
-
-# ---------- Үлгі деректерді қосу (тек 2026 жыл) ----------
+# ---------- Үлгі деректерді қосу (тек 2026) ----------
 def insert_sample_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-
-    # Барлық ескі деректерді өшіру (егер қайта қосса)
     c.execute("DELETE FROM activities")
     c.execute("DELETE FROM users WHERE role='student'")
     c.execute("DELETE FROM students")
-
-    # Сыныптар мен оқушылар саны
-    classes = {
-        "9А": 20,
-        "9Ә": 20,
-        "9В": 20
-    }
-
+    classes = {"9А": 20, "9Ә": 20, "9В": 20}
     unique_names = [
         "Айбек Төлегенов", "Диана Смағұлова", "Ерасыл Нұржан", "Жансая Әлібекқызы", "Мерей Қайрат",
         "Нұрай Серікқызы", "Санат Бекболат", "Томирис Жанәділ", "Шыңғыс Арман", "Алихан Нұрланұлы",
@@ -83,18 +71,14 @@ def insert_sample_data():
         "Ақжол Бекболатұлы", "Баян Нұржанқызы", "Дәулет Қайратұлы", "Ержан Серікұлы", "Жұлдыз Оразова",
         "Зангар Төлеуов", "Инабат Нұрланқызы", "Қуаныш Мұратұлы", "Лаура Серікқызы", "Мұхтар Байғазин"
     ]
-
     name_index = 0
     for class_name, count in classes.items():
         for i in range(count):
             student_name = unique_names[name_index]
             name_index += 1
             c.execute("INSERT INTO students (name, class_name) VALUES (?,?)", (student_name, class_name))
-
     c.execute("SELECT id FROM students")
     student_ids = [row[0] for row in c.fetchall()]
-
-    # БАРЛЫҒЫ 2026 ЖЫЛ
     dates = [
         ("2026-04-01", "Алгоритмдер (БЖБ)", "БЖБ"),
         ("2026-04-08", "Циклдер (БЖБ)", "БЖБ"),
@@ -102,7 +86,6 @@ def insert_sample_data():
         ("2026-04-22", "Массивтер (формативті)", "Формативті"),
         ("2026-04-29", "Функциялар (ТЖБ)", "ТЖБ")
     ]
-
     for sid in student_ids:
         for date, task_title, task_type in dates:
             if task_type == "Формативті":
@@ -112,7 +95,7 @@ def insert_sample_data():
                 score = random.randint(50, 100)
                 grade_10 = round(score / 10)
                 resp = random.uniform(15, 30)
-            else:  # ТЖБ
+            else:
                 score = random.randint(50, 100)
                 grade_10 = round(score / 10)
                 resp = random.uniform(30, 45)
@@ -120,20 +103,17 @@ def insert_sample_data():
             c.execute(
                 "INSERT INTO activities (student_id, date, task_title, task_type, grade_10, response_time, attendance) VALUES (?,?,?,?,?,?,?)",
                 (sid, date, task_title, task_type, grade_10, resp, att))
-
     c.execute("SELECT id FROM students ORDER BY id")
     for idx, (sid,) in enumerate(c.fetchall(), 1):
         username = f"student{idx}"
         pwd_hash = hashlib.sha256(f"{username}123".encode()).hexdigest()
         c.execute("INSERT OR IGNORE INTO users (username, password_hash, role, student_id) VALUES (?,?,?,?)",
                   (username, pwd_hash, "student", sid))
-
     conn.commit()
     conn.close()
-    print("2026 жылғы үлгі деректер сәтті қосылды!")
+    print("2026 жылғы үлгі деректер қосылды!")
 
-
-# ---------- Қалған функциялар (өзгеріссіз) ----------
+# ---------- Көмекші функциялар ----------
 def get_students():
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query("SELECT id, name FROM students", conn)
@@ -222,10 +202,26 @@ def show_database():
         st.dataframe(df, use_container_width=True)
     conn.close()
 
+# ---------- Деңгейлеу функциясы ----------
+def get_level(score):
+    if score >= 80:
+        return "🟢 Жоғары"
+    elif score >= 50:
+        return "🟡 Орта"
+    else:
+        return "🔴 Төмен"
+
+def get_level_short(score):
+    if score >= 80:
+        return "Жоғары"
+    elif score >= 50:
+        return "Орта"
+    else:
+        return "Төмен"
 
 # ---------- STREAMLIT ----------
 init_db()
-insert_sample_data()  # Автоматты түрде үлгі деректерді қосу (2026)
+insert_sample_data()  # Автоматты түрде 2026 деректер қосылады
 
 st.set_page_config(layout="wide")
 
@@ -255,7 +251,7 @@ if not st.session_state.auth:
 
 st.title("📊 Информатика пәні бойынша оқу белсенділігін мониторингтеу жүйесі")
 
-# Бүйірлік панель
+# Sidebar
 with st.sidebar:
     if st.session_state.role == "teacher":
         st.markdown("### 📌 Басты әрекеттер")
@@ -293,10 +289,9 @@ if st.session_state.get("show_db", False):
         st.rerun()
     st.markdown("---")
 
-# Мұғалім интерфейсі
+# ---------- Мұғалім интерфейсі ----------
 if st.session_state.role == "teacher":
     students_df = get_students()
-
     col1, col2 = st.columns(2)
     with col1:
         start_date = st.date_input("Басталу күні", datetime(2026, 4, 1), key="start")
@@ -305,9 +300,7 @@ if st.session_state.role == "teacher":
     start_str = start_date.strftime("%Y-%m-%d")
     end_str = end_date.strftime("%Y-%m-%d")
 
-    tabs = st.tabs(
-        ["📈 Мониторинг", "✏️ Деректерді енгізу", "📉 Жеке графиктер", "📊 Сыныптық талдау", "🔑 Оқушы логиндері",
-         "📂 Импорт / API"])
+    tabs = st.tabs(["📈 Мониторинг", "✏️ Деректерді енгізу", "📉 Жеке графиктер", "📊 Сыныптық талдау", "🔑 Оқушы логиндері", "📂 Импорт / API"])
 
     with tabs[0]:
         conn = sqlite3.connect(DB_NAME)
@@ -323,12 +316,13 @@ if st.session_state.role == "teacher":
             st.info(f"{selected_class} сыныбы үшін берілген күн аралығында деректер жоқ.")
         else:
             df['Белсенділік'] = df.apply(calc_index, axis=1)
-            task_type_filter = st.selectbox("Тапсырма түрін таңдаңыз", ["Формативті", "БЖБ", "ТЖБ"],
-                                            key="task_type_filter")
+            task_type_filter = st.selectbox("Тапсырма түрін таңдаңыз", ["Формативті", "БЖБ", "ТЖБ"], key="task_type_filter")
             df_filtered = df[df['task_type'] == task_type_filter].copy()
+
             if df_filtered.empty:
                 st.info(f"Бұл күн аралығында {task_type_filter} түрі бойынша деректер жоқ.")
             else:
+                # Соңғы тапсырма бойынша әр оқушының көрсеткіштері
                 latest_filtered = df_filtered.sort_values('date').groupby('student_id').last().reset_index()
                 predictions = []
                 warnings = []
@@ -336,8 +330,9 @@ if st.session_state.role == "teacher":
                     sid = row['student_id']
                     pred = predict_next_grade(sid)
                     predictions.append(pred if pred is not None else "—")
-                    if row['Белсенділік'] < 50 or row['grade_10'] < 4:
-                        warnings.append("⚠️")
+                    # Ескерту тек төменгі деңгей үшін (қызыл)
+                    if row['Белсенділік'] < 50:
+                        warnings.append("🔴 Төмен деңгей")
                     else:
                         warnings.append("")
 
@@ -350,15 +345,47 @@ if st.session_state.role == "teacher":
                     'Келесі болжам': predictions,
                     'Ескерту': warnings
                 })
-                st.subheader(f"📋 {selected_class} сыныбының оқушылар кестесі")
-                st.dataframe(full_df, use_container_width=True)
 
+                # ----- ҮШ ДЕҢГЕЙЛІ КЕРІ БАЙЛАНЫС (ЖАСЫЛ, САРЫ, ҚЫЗЫЛ) -----
+                full_df['Деңгей'] = full_df['Белсенділік (0-100)'].apply(get_level)
+                # Деңгейдің қысқаша атауы (педагогикалық ұсыныстар үшін)
+                full_df['Ұсыныс'] = full_df['Белсенділік (0-100)'].apply(
+                    lambda x: '🏆 Жоғары деңгей – мадақтау, күрделі тапсырмалар' if x >= 80 else
+                              '📚 Орта деңгей – қосымша жаттығулар, жеке көмек' if x >= 50 else
+                              '⚠️ Төмен деңгей – себебін анықтау, ата-анамен байланыс'
+                )
+
+                # Статистика: деңгейлер бойынша бөліну
+                level_counts = full_df['Деңгей'].value_counts()
+                total = len(full_df)
+                col_stats1, col_stats2, col_stats3 = st.columns(3)
+                with col_stats1:
+                    green = level_counts.get('🟢 Жоғары', 0)
+                    st.metric("🟢 Жоғары деңгей", f"{green} ({green/total*100:.1f}%)")
+                with col_stats2:
+                    yellow = level_counts.get('🟡 Орта', 0)
+                    st.metric("🟡 Орта деңгей", f"{yellow} ({yellow/total*100:.1f}%)")
+                with col_stats3:
+                    red = level_counts.get('🔴 Төмен', 0)
+                    st.metric("🔴 Төмен деңгей", f"{red} ({red/total*100:.1f}%)")
+
+                st.subheader(f"📋 {selected_class} сыныбының оқушылар кестесі (деңгейлер бойынша)")
+                # Кестені түспен көрсету (деңгей бағаны бойынша)
+                styled_df = full_df.style.applymap(
+                    lambda v: 'background-color: #c8e6c9' if v == '🟢 Жоғары' else
+                              'background-color: #fff9c4' if v == '🟡 Орта' else
+                              'background-color: #ffcdd2' if v == '🔴 Төмен' else '',
+                    subset=['Деңгей']
+                )
+                st.dataframe(styled_df, use_container_width=True)
+
+                # ----- Графиктер (бұрынғыдай, бірақ деңгейлер қосылды) -----
                 if st.session_state.get("show_act", False):
-                    st.subheader("📊 Белсенділік индексі (гистограмма)")
+                    st.subheader("📊 Белсенділік индексі (гистограмма) – деңгейлер бойынша")
                     fig_act = px.bar(full_df, x='Оқушы', y='Белсенділік (0-100)',
-                                     title="Белсенділік индексі (0-100)",
-                                     color='Белсенділік (0-100)', color_continuous_scale='Viridis')
-                    fig_act.update_layout(height=400, autosize=True)
+                                     color='Деңгей', title="Белсенділік индексі",
+                                     color_discrete_map={'🟢 Жоғары':'green', '🟡 Орта':'gold', '🔴 Төмен':'red'})
+                    fig_act.update_layout(height=400)
                     st.plotly_chart(fig_act, use_container_width=True)
                     st.session_state.show_act = False
 
@@ -367,29 +394,28 @@ if st.session_state.role == "teacher":
                     fig_pred = px.bar(full_df, x='Оқушы', y='Келесі болжам',
                                       title="Болжамды бағалар (1-10)",
                                       color='Келесі болжам', color_continuous_scale='Blues')
-                    fig_pred.update_layout(height=400, autosize=True)
+                    fig_pred.update_layout(height=400)
                     st.plotly_chart(fig_pred, use_container_width=True)
                     st.session_state.show_pred = False
 
                 if st.session_state.get("show_warn", False):
-                    st.subheader("⚠️ Ескерту қажет оқушылар")
-                    warns = full_df[full_df['Ескерту'] == "⚠️"]
+                    st.subheader("⚠️ Ескерту қажет оқушылар (Төмен деңгей)")
+                    warns = full_df[full_df['Деңгей'] == '🔴 Төмен']
                     if not warns.empty:
-                        st.warning("Төмендегі оқушыларға назар аударыңыз:")
-                        st.dataframe(warns[['Оқушы', 'Белсенділік (0-100)', 'Келесі болжам']],
+                        st.warning("Төмендегі оқушыларға назар аударыңыз (ОБИ < 50):")
+                        st.dataframe(warns[['Оқушы', 'Белсенділік (0-100)', 'Келесі болжам', 'Ұсыныс']],
                                      use_container_width=True)
                     else:
-                        st.success("Ескерту қажет оқушы жоқ.")
+                        st.success("Төмен деңгейдегі оқушы жоқ.")
                     st.session_state.show_warn = False
 
                 if st.session_state.get("show_line", False):
                     st.subheader("📈 Белсенділік пен болжамның сызықтық салыстыруы")
                     fig_line = px.line(full_df, x='Оқушы',
                                        y=['Белсенділік (0-100)', 'Келесі болжам'],
-                                       title="Белсенділік пен болжамның салыстыруы (сызықтық)",
-                                       markers=True,
+                                       title="Салыстыру", markers=True,
                                        color_discrete_sequence=['#2ed573', '#4a9eff'])
-                    fig_line.update_layout(height=400, autosize=True)
+                    fig_line.update_layout(height=400)
                     st.plotly_chart(fig_line, use_container_width=True)
                     st.session_state.show_line = False
 
@@ -398,34 +424,26 @@ if st.session_state.role == "teacher":
                     pivot = df_filtered.pivot_table(index='name', columns='date', values='grade_10', aggfunc='first')
                     if not pivot.empty:
                         fig_heat = px.imshow(pivot, text_auto=True, aspect="auto", color_continuous_scale='Blues',
-                                             title="Бағалардың жылу картасы")
-                        fig_heat.update_layout(height=400, autosize=True)
+                                             title="Бағалар")
+                        fig_heat.update_layout(height=400)
                         st.plotly_chart(fig_heat, use_container_width=True)
                     else:
                         st.info("Жылу картасы үшін деректер жоқ.")
                     st.session_state.show_heat = False
 
-                st.caption("⚠️ - белсенділік 50-ден төмен немесе баға 4-тен төмен оқушылар")
+                st.caption("🟢 Жоғары (ОБИ≥80) | 🟡 Орта (50-79) | 🔴 Төмен (<50)")
 
                 if st.session_state.get("show_top", False):
                     st.subheader("🏆 Үздік оқушылар")
-                    top_by_grade = full_df.nlargest(5, 'Баға (1-10)')[['Оқушы', 'Баға (1-10)', 'Белсенділік (0-100)']]
+                    top_by_grade = full_df.nlargest(5, 'Баға (1-10)')[['Оқушы', 'Баға (1-10)', 'Деңгей']]
                     st.write("**Ең жоғары балл алған 5 оқушы:**")
                     st.dataframe(top_by_grade, use_container_width=True)
-                    top_by_activity = full_df.nlargest(5, 'Белсенділік (0-100)')[
-                        ['Оқушы', 'Белсенділік (0-100)', 'Баға (1-10)']]
+                    top_by_activity = full_df.nlargest(5, 'Белсенділік (0-100)')[['Оқушы', 'Белсенділік (0-100)', 'Деңгей']]
                     st.write("**Ең белсенді 5 оқушы:**")
                     st.dataframe(top_by_activity, use_container_width=True)
-                    top_both = full_df[(full_df['Баға (1-10)'] >= 9) & (full_df['Белсенділік (0-100)'] >= 80)]
-                    if not top_both.empty:
-                        st.write("**Бағасы ≥ 9 ЖӘНЕ Белсенділігі ≥ 80 оқушылар:**")
-                        st.dataframe(top_both[['Оқушы', 'Баға (1-10)', 'Белсенділік (0-100)']],
-                                     use_container_width=True)
-                    else:
-                        st.info("Жоғары балл мен белсенділікті біріктірген оқушы жоқ.")
                     st.session_state.show_top = False
 
-    # Қалған қойындылар (өзгеріссіз) - қысқарту үшін толық жазу керек, бірақ олар жоғарыдағы кодта дұрыс
+    # Қалған қойындылар (өзгеріссіз)
     with tabs[1]:
         if students_df.empty:
             st.warning("Оқушылар жоқ")
@@ -490,7 +508,7 @@ if st.session_state.role == "teacher":
                 st.plotly_chart(px.line(avg_idx, x='date', y='Белсенділік', markers=True, title="Сыныптың орташа белсенділігі"), use_container_width=True)
             pivot = df_class.pivot_table(index='name', columns='date', values='grade_10')
             if not pivot.empty:
-                st.plotly_chart(px.imshow(pivot, text_auto=True, aspect="auto", color_continuous_scale='Blues', title="Жылу картасы (бағалар)"), use_container_width=True)
+                st.plotly_chart(px.imshow(pivot, text_auto=True, aspect="auto", color_continuous_scale='Blues', title="Жылу картасы"), use_container_width=True)
         else:
             st.info("Деректер жоқ")
 
@@ -545,6 +563,7 @@ if st.session_state.role == "teacher":
             except Exception as e:
                 st.error(f"Қате: {e}")
 
+# ---------- Оқушы интерфейсі ----------
 else:
     name = get_student_name(st.session_state.sid)
     st.subheader(f"Қош келдің, {name}!")
@@ -553,6 +572,10 @@ else:
         st.info("Сізге әлі баға енгізілмеген")
     else:
         df['Белсенділік'] = df.apply(calc_index, axis=1)
+        # Оқушының деңгейін есептеу (соңғы белсенділік бойынша)
+        latest_score = df.sort_values('date').iloc[-1]['Белсенділік']
+        level = get_level(latest_score)
+        st.info(f"Сіздің ағымдағы деңгейіңіз: **{level}** (ОБИ = {latest_score})")
         st.dataframe(df[['date', 'task_title', 'task_type', 'grade_10', 'response_time', 'attendance', 'Белсенділік']], use_container_width=True)
         c1, c2 = st.columns(2)
         with c1:
