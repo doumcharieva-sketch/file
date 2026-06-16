@@ -11,12 +11,10 @@ import os
 
 DB_NAME = "activity_monitor.db"
 
-# ЕСКІ БАЗАНЫ ЖОЮ (әр іске қосқанда жаңа база)
-if os.path.exists(DB_NAME):
-    os.remove(DB_NAME)
-    print(f"Ескі база жойылды: {DB_NAME}")
+# ---------- ЕСКІ БАЗАНЫ ЖОЮДЫ ӨШІРІҢІЗ (немесе түсініктемеге айналдырыңыз) ----------
+# if os.path.exists(DB_NAME):
+#     os.remove(DB_NAME)
 
-# ---------- Дерекқор инициализациясы ----------
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -47,9 +45,8 @@ def init_db():
               ("teacher", teacher_hash, "teacher"))
     conn.commit()
     conn.close()
-    print("Жаңа дерекқор дайын.")
+    print("Дерекқор дайын.")
 
-# ---------- Үлгі деректерді қосу (тек 2026) ----------
 def insert_sample_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -111,9 +108,8 @@ def insert_sample_data():
                   (username, pwd_hash, "student", sid))
     conn.commit()
     conn.close()
-    print("2026 жылғы үлгі деректер қосылды!")
+    print("2026 жылғы деректер қосылды!")
 
-# ---------- Көмекші функциялар ----------
 def get_students():
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql_query("SELECT id, name FROM students", conn)
@@ -202,7 +198,6 @@ def show_database():
         st.dataframe(df, use_container_width=True)
     conn.close()
 
-# ---------- Деңгейлеу функциясы ----------
 def get_level(score):
     if score >= 80:
         return "🟢 Жоғары"
@@ -211,17 +206,8 @@ def get_level(score):
     else:
         return "🔴 Төмен"
 
-def get_level_short(score):
-    if score >= 80:
-        return "Жоғары"
-    elif score >= 50:
-        return "Орта"
-    else:
-        return "Төмен"
-
-# ---------- STREAMLIT ----------
 init_db()
-insert_sample_data()  # Автоматты түрде 2026 деректер қосылады
+insert_sample_data()  # автоматты түрде 2026 деректерімен толтырады
 
 st.set_page_config(layout="wide")
 
@@ -251,7 +237,6 @@ if not st.session_state.auth:
 
 st.title("📊 Информатика пәні бойынша оқу белсенділігін мониторингтеу жүйесі")
 
-# Sidebar
 with st.sidebar:
     if st.session_state.role == "teacher":
         st.markdown("### 📌 Басты әрекеттер")
@@ -289,7 +274,6 @@ if st.session_state.get("show_db", False):
         st.rerun()
     st.markdown("---")
 
-# ---------- Мұғалім интерфейсі ----------
 if st.session_state.role == "teacher":
     students_df = get_students()
     col1, col2 = st.columns(2)
@@ -322,7 +306,6 @@ if st.session_state.role == "teacher":
             if df_filtered.empty:
                 st.info(f"Бұл күн аралығында {task_type_filter} түрі бойынша деректер жоқ.")
             else:
-                # Соңғы тапсырма бойынша әр оқушының көрсеткіштері
                 latest_filtered = df_filtered.sort_values('date').groupby('student_id').last().reset_index()
                 predictions = []
                 warnings = []
@@ -330,7 +313,6 @@ if st.session_state.role == "teacher":
                     sid = row['student_id']
                     pred = predict_next_grade(sid)
                     predictions.append(pred if pred is not None else "—")
-                    # Ескерту тек төменгі деңгей үшін (қызыл)
                     if row['Белсенділік'] < 50:
                         warnings.append("🔴 Төмен деңгей")
                     else:
@@ -346,16 +328,13 @@ if st.session_state.role == "teacher":
                     'Ескерту': warnings
                 })
 
-                # ----- ҮШ ДЕҢГЕЙЛІ КЕРІ БАЙЛАНЫС (ЖАСЫЛ, САРЫ, ҚЫЗЫЛ) -----
                 full_df['Деңгей'] = full_df['Белсенділік (0-100)'].apply(get_level)
-                # Деңгейдің қысқаша атауы (педагогикалық ұсыныстар үшін)
                 full_df['Ұсыныс'] = full_df['Белсенділік (0-100)'].apply(
                     lambda x: '🏆 Жоғары деңгей – мадақтау, күрделі тапсырмалар' if x >= 80 else
                               '📚 Орта деңгей – қосымша жаттығулар, жеке көмек' if x >= 50 else
                               '⚠️ Төмен деңгей – себебін анықтау, ата-анамен байланыс'
                 )
 
-                # Статистика: деңгейлер бойынша бөліну
                 level_counts = full_df['Деңгей'].value_counts()
                 total = len(full_df)
                 col_stats1, col_stats2, col_stats3 = st.columns(3)
@@ -370,8 +349,9 @@ if st.session_state.role == "teacher":
                     st.metric("🔴 Төмен деңгей", f"{red} ({red/total*100:.1f}%)")
 
                 st.subheader(f"📋 {selected_class} сыныбының оқушылар кестесі (деңгейлер бойынша)")
-                # Кестені түспен көрсету (деңгей бағаны бойынша)
-                styled_df = full_df.style.applymap(
+
+                # ✅ ТҮЗЕТУ: applymap -> map
+                styled_df = full_df.style.map(
                     lambda v: 'background-color: #c8e6c9' if v == '🟢 Жоғары' else
                               'background-color: #fff9c4' if v == '🟡 Орта' else
                               'background-color: #ffcdd2' if v == '🔴 Төмен' else '',
@@ -379,7 +359,6 @@ if st.session_state.role == "teacher":
                 )
                 st.dataframe(styled_df, use_container_width=True)
 
-                # ----- Графиктер (бұрынғыдай, бірақ деңгейлер қосылды) -----
                 if st.session_state.get("show_act", False):
                     st.subheader("📊 Белсенділік индексі (гистограмма) – деңгейлер бойынша")
                     fig_act = px.bar(full_df, x='Оқушы', y='Белсенділік (0-100)',
@@ -443,7 +422,7 @@ if st.session_state.role == "teacher":
                     st.dataframe(top_by_activity, use_container_width=True)
                     st.session_state.show_top = False
 
-    # Қалған қойындылар (өзгеріссіз)
+    # tabs[1] - [5] толықтыру (бұрынғыдай, қысқартып жазылған, бірақ жұмыс істейді)
     with tabs[1]:
         if students_df.empty:
             st.warning("Оқушылар жоқ")
@@ -563,7 +542,6 @@ if st.session_state.role == "teacher":
             except Exception as e:
                 st.error(f"Қате: {e}")
 
-# ---------- Оқушы интерфейсі ----------
 else:
     name = get_student_name(st.session_state.sid)
     st.subheader(f"Қош келдің, {name}!")
@@ -572,7 +550,6 @@ else:
         st.info("Сізге әлі баға енгізілмеген")
     else:
         df['Белсенділік'] = df.apply(calc_index, axis=1)
-        # Оқушының деңгейін есептеу (соңғы белсенділік бойынша)
         latest_score = df.sort_values('date').iloc[-1]['Белсенділік']
         level = get_level(latest_score)
         st.info(f"Сіздің ағымдағы деңгейіңіз: **{level}** (ОБИ = {latest_score})")
